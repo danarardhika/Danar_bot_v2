@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 # ============================================
 load_dotenv()
 
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN', '')
+TELEGRAM_TOKEN = os.getenv('8523825536:AAFrUBVnWCL90wV-IFvggJ7ZDMLJBpTJl1g', '')
 if not TELEGRAM_TOKEN:
     raise ValueError("TELEGRAM_TOKEN tidak ditemukan!")
 
