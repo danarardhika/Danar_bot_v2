@@ -20,7 +20,7 @@ COPY main.py .
 # Create directories
 RUN mkdir -p data charts logs
 
-# Health check yang lebih baik untuk Railway
+# Health check untuk Railway
 HEALTHCHECK --interval=30s --timeout=30s --start-period=30s --retries=3 \
     CMD python -c "import sys; sys.exit(0)" || exit 1
 
