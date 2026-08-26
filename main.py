@@ -2,9 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Bot Saham Danar v2.0
-Telegram Bot untuk monitoring saham Indonesia
-Deploy di Railway.app
+Bot Saham Danar v2.1 - ANTI CRASH
 """
 
 import os
@@ -14,145 +12,68 @@ import logging
 import time
 import traceback
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # Gunakan backend non-interaktif untuk server
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-from telegram.error import TelegramError
+from telegram.error import TelegramError, NetworkError
 from dotenv import load_dotenv
 
 # ============================================
-# KONFIGURASI DENGAN ERROR HANDLING
+# KONFIGURASI
 # ============================================
 
-# Load .env file
 load_dotenv()
 
-def get_env_var(var_name: str, default: str = '') -> str:
-    """Ambil environment variable dengan error handling"""
-    value = os.getenv(var_name)
-    if value is None or value == '':
-        if default:
-            return default
-        raise ValueError(f"Environment variable {var_name} tidak ditemukan!")
-    return value
-
-# Token - MANDATORY
-try:
-    TELEGRAM_TOKEN = get_env_var('8523825536:AAFrUBVnWCL90wV-IFvggJ7ZDMLJBpTJl1g')
-    print(f"✅ TELEGRAM_TOKEN ditemukan: {TELEGRAM_TOKEN[:15]}...")
-except ValueError as e:
-    print("=" * 70)
-    print("❌ ERROR: TELEGRAM_TOKEN TIDAK DITEMUKAN!")
-    print("=" * 70)
-    print("\n📌 CARA SETUP DI RAILWAY:")
-    print("1. Buka Railway Dashboard")
-    print("2. Pilih proyek ini")
-    print("3. Klik tab 'Variables'")
-    print("4. Tambahkan variable:")
-    print("   TELEGRAM_TOKEN = [token_dari_botfather]")
-    print("\n📌 CARA DAPATKAN TOKEN:")
-    print("1. Buka Telegram")
-    print("2. Cari @BotFather")
-    print("3. Kirim /newbot")
-    print("4. Ikuti instruksi")
-    print("5. Copy token yang diberikan")
-    print("=" * 70)
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN', '')
+if not TELEGRAM_TOKEN:
+    print("❌ ERROR: TELEGRAM_TOKEN tidak ditemukan!")
     sys.exit(1)
 
-# Optional variables
 CHANNEL_ID = os.getenv('CHANNEL_ID', '')
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'production')
-DEBUG = ENVIRONMENT == 'development'
 PORT = int(os.getenv('PORT', 8080))
 
 # Watchlist
-try:
-    watchlist_str = os.getenv('WATCHLIST', '')
-    if watchlist_str:
-        WATCHLIST = [s.strip().upper() for s in watchlist_str.split(',') if s.strip()]
-    else:
-        WATCHLIST = ['BBCA', 'BBRI', 'BMRI', 'TLKM', 'ASII', 'UNVR', 'GOTO', 'ANTM', 'INDF']
-except:
-    WATCHLIST = ['BBCA', 'BBRI', 'BMRI', 'TLKM', 'ASII', 'UNVR', 'GOTO', 'ANTM', 'INDF']
+watchlist_str = os.getenv('WATCHLIST', '')
+if watchlist_str:
+    WATCHLIST = [s.strip().upper() for s in watchlist_str.split(',') if s.strip()]
+else:
+    WATCHLIST = ['BBCA', 'BBRI', 'BMRI', 'TLKM', 'ASII', 'UNVR', 'GOTO']
 
-# Threshold
 VOLUME_THRESHOLD = float(os.getenv('VOLUME_THRESHOLD', '1.5'))
-RSI_OVERSOLD = int(os.getenv('RSI_OVERSOLD', '30'))
-RSI_OVERBOUGHT = int(os.getenv('RSI_OVERBOUGHT', '70'))
 
 # ============================================
 # SETUP LOGGING
 # ============================================
 
-# Buat folder logs
 os.makedirs('logs', exist_ok=True)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.DEBUG if DEBUG else logging.INFO,
+    level=logging.INFO,
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('logs/bot.log', encoding='utf-8')
+        logging.FileHandler('logs/bot.log')
     ]
 )
 logger = logging.getLogger(__name__)
 
 # ============================================
-# PRINT INFO STARTUP
-# ============================================
-
-print("=" * 70)
-print("🤖 BOT SAHAM DANAR v2.0")
-print("=" * 70)
-print(f"📌 Token: {'✓' if TELEGRAM_TOKEN else '✗'}")
-print(f"📌 Channel ID: {'✓' if CHANNEL_ID else '✗ (opsional)'}")
-print(f"📌 Watchlist: {len(WATCHLIST)} saham")
-print(f"📌 Watchlist: {', '.join(WATCHLIST)}")
-print(f"📌 Environment: {ENVIRONMENT}")
-print(f"📌 Debug: {'Ya' if DEBUG else 'Tidak'}")
-print(f"📌 Port: {PORT}")
-print("=" * 70)
-
-# ============================================
-# NAMA PERUSAHAAN
-# ============================================
-
-COMPANY_NAMES = {
-    'BBCA': 'Bank Central Asia',
-    'BBRI': 'Bank Rakyat Indonesia',
-    'BMRI': 'Bank Mandiri',
-    'TLKM': 'Telkom Indonesia',
-    'ASII': 'Astra International',
-    'UNVR': 'Unilever Indonesia',
-    'GOTO': 'GoTo Gojek Tokopedia',
-    'ANTM': 'Aneka Tambang',
-    'INDF': 'Indofood',
-    'CPIN': 'Charoen Pokphand',
-    'ICBP': 'Indofood CBP',
-    'PGAS': 'Perusahaan Gas Negara',
-    'ADRO': 'Adaro Energy',
-    'SMCB': 'Semen Indonesia',
-    'TINS': 'Timah Indonesia'
-}
-
-# ============================================
 # FUNGSI UTILITY
 # ============================================
 
-def format_price(price: float) -> str:
-    """Format harga ke Rupiah"""
+def format_price(price):
     return f"Rp{price:,.0f}".replace(',', '.')
 
-def format_volume(volume: float) -> str:
-    """Format volume dengan satuan"""
+def format_volume(volume):
     if volume >= 1e9:
         return f"{volume/1e9:.2f}B"
     elif volume >= 1e6:
@@ -162,184 +83,124 @@ def format_volume(volume: float) -> str:
     else:
         return f"{volume:.0f}"
 
-def is_valid_symbol(symbol: str) -> bool:
-    """Validasi kode saham"""
-    return len(symbol) >= 3 and symbol.isalpha() and symbol.isupper()
-
-def safe_json_load(filepath: str, default: Any = None) -> Any:
-    """Load JSON dengan safe"""
+def safe_json_load(filepath, default=None):
     try:
         if os.path.exists(filepath):
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, 'r') as f:
                 return json.load(f)
-    except Exception as e:
-        logger.warning(f"Error loading {filepath}: {str(e)}")
+    except:
+        pass
     return default or {}
 
-def safe_json_save(filepath: str, data: Any) -> bool:
-    """Save JSON dengan safe"""
+def safe_json_save(filepath, data):
     try:
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        with open(filepath, 'w') as f:
+            json.dump(data, f, indent=2)
         return True
-    except Exception as e:
-        logger.error(f"Error saving {filepath}: {str(e)}")
+    except:
         return False
 
-def get_company_name(symbol: str) -> str:
-    """Dapatkan nama perusahaan"""
-    return COMPANY_NAMES.get(symbol, symbol)
-
-def get_uptime(start_time: datetime) -> str:
-    """Hitung uptime"""
-    if not start_time:
-        return "Baru mulai"
-    delta = datetime.now() - start_time
-    days = delta.days
-    hours = delta.seconds // 3600
-    minutes = (delta.seconds % 3600) // 60
-    if days > 0:
-        return f"{days}d {hours}h {minutes}m"
-    return f"{hours}h {minutes}m"
-
-def get_timestamp() -> str:
-    """Dapatkan timestamp sekarang"""
-    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+COMPANY_NAMES = {
+    'BBCA': 'Bank Central Asia',
+    'BBRI': 'Bank Rakyat Indonesia',
+    'BMRI': 'Bank Mandiri',
+    'TLKM': 'Telkom Indonesia',
+    'ASII': 'Astra International',
+    'UNVR': 'Unilever Indonesia',
+    'GOTO': 'GoTo Gojek Tokopedia'
+}
 
 # ============================================
-# SCREENER - DATA & ANALISIS
+# SCREENER DENGAN RETRY & TIMEOUT
 # ============================================
 
 class Screener:
-    """Class untuk mengambil dan menganalisis data saham"""
-    
     def __init__(self):
         self.cache_dir = 'data'
         os.makedirs(self.cache_dir, exist_ok=True)
         self.cache_file = os.path.join(self.cache_dir, 'stock_cache.json')
-        self.cache = self._load_cache()
+        self.cache = safe_json_load(self.cache_file, {})
         self.watchlist = WATCHLIST.copy()
-        self.last_update = None
-        
-    def _load_cache(self) -> Dict:
-        """Load cache dari file"""
-        return safe_json_load(self.cache_file, {})
 
-    def _save_cache(self) -> None:
-        """Save cache ke file"""
+    def save_cache(self):
         safe_json_save(self.cache_file, self.cache)
-        self.last_update = datetime.now()
 
-    def _get_cache_key(self, symbol: str, period: str) -> str:
-        """Buat key untuk cache"""
-        return f"{symbol}_{period}"
-
-    def _is_cache_valid(self, cache_key: str, max_age_minutes: int = 5) -> bool:
-        """Cek apakah cache masih valid"""
-        if cache_key not in self.cache:
-            return False
-        cache_time = self.cache[cache_key].get('timestamp', '')
-        if not cache_time:
-            return False
-        try:
-            cache_date = datetime.fromisoformat(cache_time)
-            return (datetime.now() - cache_date) < timedelta(minutes=max_age_minutes)
-        except:
-            return False
-
-    def get_stock_data(self, symbol: str, period: str = '1mo', force_refresh: bool = False) -> Optional[pd.DataFrame]:
-        """
-        Mengambil data saham dengan cache
-        """
-        cache_key = self._get_cache_key(symbol, period)
+    def get_stock_data(self, symbol, period='1mo', max_retries=3):
+        """Ambil data dengan retry jika gagal"""
+        cache_key = f"{symbol}_{period}"
         
-        # Check cache
-        if not force_refresh and self._is_cache_valid(cache_key):
-            logger.info(f"📦 Menggunakan cache untuk {symbol}")
+        # Cek cache
+        if cache_key in self.cache:
+            cache_time = self.cache[cache_key].get('timestamp', '')
+            if cache_time:
+                try:
+                    cache_date = datetime.fromisoformat(cache_time)
+                    if (datetime.now() - cache_date) < timedelta(minutes=5):
+                        logger.info(f"📦 Cache {symbol}")
+                        data_dict = self.cache[cache_key]['data']
+                        return pd.DataFrame(data_dict)
+                except:
+                    pass
+
+        # Retry mechanism
+        for attempt in range(max_retries):
             try:
-                data_dict = self.cache[cache_key]['data']
-                df = pd.DataFrame(data_dict)
-                if not df.empty:
-                    return df
+                logger.info(f"📥 Mengambil data {symbol} (attempt {attempt+1}/{max_retries})")
+                ticker = yf.Ticker(f"{symbol}.JK")
+                data = ticker.history(period=period, timeout=10)
+                
+                if not data.empty:
+                    self.cache[cache_key] = {
+                        'timestamp': datetime.now().isoformat(),
+                        'data': data.to_dict('list')
+                    }
+                    self.save_cache()
+                    return data
+                    
             except Exception as e:
-                logger.warning(f"Error load cache {symbol}: {str(e)}")
+                logger.warning(f"Attempt {attempt+1} failed for {symbol}: {str(e)}")
+                time.sleep(2)  # Tunggu sebelum retry
+                
+        logger.error(f"❌ Gagal mengambil data {symbol} setelah {max_retries} percobaan")
+        return None
 
-        try:
-            # Ambil dari Yahoo Finance
-            ticker_symbol = f"{symbol}.JK"
-            ticker = yf.Ticker(ticker_symbol)
-            data = ticker.history(period=period)
-            
-            if data.empty:
-                logger.warning(f"⚠️ Data kosong untuk {symbol}")
-                return None
-
-            # Simpan ke cache
-            self.cache[cache_key] = {
-                'timestamp': datetime.now().isoformat(),
-                'data': data.to_dict('list')
-            }
-            self._save_cache()
-            
-            logger.info(f"✅ Data {symbol} berhasil diambil")
-            return data
-            
-        except Exception as e:
-            logger.error(f"❌ Error mengambil data {symbol}: {str(e)}")
-            return None
-
-    def calculate_indicators(self, data: pd.DataFrame) -> Optional[Dict]:
-        """
-        Menghitung indikator teknikal
-        """
+    def calculate_indicators(self, data):
         if data is None or len(data) < 20:
             return None
 
         try:
             close = data['Close']
-            
-            # RSI (14)
             delta = close.diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
             rs = gain / loss
             rsi = 100 - (100 / (1 + rs))
             
-            # Moving Averages
             ma20 = close.rolling(window=20).mean()
             ma50 = close.rolling(window=50).mean() if len(data) >= 50 else close.rolling(window=20).mean()
             
-            # Volume
-            volume = data['Volume']
-            avg_volume = volume.rolling(window=20).mean()
-            volume_ratio = volume.iloc[-1] / avg_volume.iloc[-1] if avg_volume.iloc[-1] > 0 else 0
-            
-            # Price change
+            avg_volume = data['Volume'].rolling(window=20).mean()
+            volume_ratio = data['Volume'].iloc[-1] / avg_volume.iloc[-1] if avg_volume.iloc[-1] > 0 else 0
             change = ((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2]) * 100 if len(data) > 1 else 0
 
             return {
                 'price': close.iloc[-1],
                 'change': change,
-                'volume': volume.iloc[-1],
+                'volume': data['Volume'].iloc[-1],
                 'volume_ratio': volume_ratio,
                 'rsi': rsi.iloc[-1] if len(rsi) > 0 else 50,
                 'ma20': ma20.iloc[-1] if len(ma20) > 0 else close.iloc[-1],
                 'ma50': ma50.iloc[-1] if len(ma50) > 0 else close.iloc[-1],
                 'high': data['High'].iloc[-1],
-                'low': data['Low'].iloc[-1],
-                'open': data['Open'].iloc[-1]
+                'low': data['Low'].iloc[-1]
             }
         except Exception as e:
-            logger.error(f"Error calculating indicators: {str(e)}")
+            logger.error(f"Error indicators: {str(e)}")
             return None
 
-    def screen_all(self) -> List[Dict]:
-        """
-        Screening semua saham
-        """
+    def screen_all(self):
         results = []
-        
         for symbol in self.watchlist:
             try:
                 data = self.get_stock_data(symbol)
@@ -350,26 +211,17 @@ class Screener:
                 if ind is None:
                     continue
 
-                # Skoring
                 score = 0
-                
-                # RSI
-                if ind['rsi'] < RSI_OVERSOLD:
+                if ind['rsi'] < 30:
                     score += 2
-                elif ind['rsi'] > RSI_OVERBOUGHT:
+                elif ind['rsi'] > 70:
                     score -= 1
-                    
-                # Volume
                 if ind['volume_ratio'] > VOLUME_THRESHOLD:
                     score += 2
-                    
-                # MA
                 if ind['price'] > ind['ma20']:
                     score += 1
                 if ind['price'] > ind['ma50']:
                     score += 1
-                    
-                # Price change
                 if ind['change'] > 2:
                     score += 1
                 elif ind['change'] < -2:
@@ -377,7 +229,7 @@ class Screener:
 
                 results.append({
                     'symbol': symbol,
-                    'company': get_company_name(symbol),
+                    'company': COMPANY_NAMES.get(symbol, symbol),
                     'price': ind['price'],
                     'change': ind['change'],
                     'volume': ind['volume'],
@@ -391,10 +243,7 @@ class Screener:
         results.sort(key=lambda x: x['score'], reverse=True)
         return results
 
-    def get_latest_price(self, symbol: str) -> Optional[Dict]:
-        """
-        Mendapatkan harga terbaru
-        """
+    def get_latest_price(self, symbol):
         data = self.get_stock_data(symbol, period='5d')
         if data is None:
             return None
@@ -407,10 +256,7 @@ class Screener:
             'volume': ind['volume']
         }
 
-    def get_top_by_volume(self, limit: int = 5) -> List[Dict]:
-        """
-        Mendapatkan saham dengan volume tertinggi
-        """
+    def get_top_by_volume(self, limit=5):
         results = []
         for symbol in self.watchlist:
             try:
@@ -426,101 +272,80 @@ class Screener:
                     'change': ind['change'],
                     'volume': ind['volume']
                 })
-            except Exception:
+            except:
                 continue
         results.sort(key=lambda x: x['volume'], reverse=True)
         return results[:limit]
 
-    def clear_cache(self) -> None:
-        """Bersihkan cache"""
+    def clear_cache(self):
         self.cache = {}
-        self._save_cache()
-        logger.info("🗑️ Cache dibersihkan")
+        self.save_cache()
 
 # ============================================
 # SIGNAL GENERATOR
 # ============================================
 
 class SignalGenerator:
-    """Generator sinyal trading"""
-    
     def __init__(self):
         self.screener = Screener()
 
-    def generate_signal(self, symbol: str) -> Optional[Dict]:
-        """
-        Generate sinyal untuk satu saham
-        """
-        data = self.screener.get_stock_data(symbol)
-        if data is None:
+    def generate_signal(self, symbol):
+        try:
+            data = self.screener.get_stock_data(symbol)
+            if data is None:
+                return None
+
+            ind = self.screener.calculate_indicators(data)
+            if ind is None:
+                return None
+
+            signal = 'HOLD'
+            reasons = []
+            strength = 0
+
+            if ind['rsi'] < 30:
+                signal = 'BUY'
+                strength += 2
+                reasons.append(f'RSI Oversold ({ind["rsi"]:.1f})')
+            elif ind['rsi'] > 70:
+                signal = 'SELL'
+                strength += 2
+                reasons.append(f'RSI Overbought ({ind["rsi"]:.1f})')
+
+            if ind['ma20'] > ind['ma50'] and ind['price'] > ind['ma20']:
+                if signal == 'HOLD':
+                    signal = 'BUY'
+                strength += 1
+                reasons.append('Golden Cross')
+            elif ind['ma20'] < ind['ma50'] and ind['price'] < ind['ma20']:
+                if signal == 'HOLD':
+                    signal = 'SELL'
+                strength += 1
+                reasons.append('Death Cross')
+
+            if ind['volume_ratio'] > 2.0:
+                if signal == 'HOLD':
+                    signal = 'BUY' if ind['change'] > 0 else 'SELL'
+                strength += 1
+                reasons.append(f'Volume Tinggi ({ind["volume_ratio"]:.1f}x)')
+
+            return {
+                'symbol': symbol,
+                'price': ind['price'],
+                'change': ind['change'],
+                'rsi': ind['rsi'],
+                'volume': ind['volume'],
+                'ma20': ind['ma20'],
+                'ma50': ind['ma50'],
+                'signal': signal,
+                'strength': strength,
+                'reason': ', '.join(reasons) if reasons else 'Tidak ada sinyal kuat'
+            }
+        except Exception as e:
+            logger.error(f"Error signal {symbol}: {str(e)}")
             return None
 
-        ind = self.screener.calculate_indicators(data)
-        if ind is None:
-            return None
-
-        signal = 'HOLD'
-        reasons = []
-        strength = 0
-
-        # RSI Signal
-        if ind['rsi'] < RSI_OVERSOLD:
-            signal = 'BUY'
-            strength += 2
-            reasons.append(f'RSI Oversold ({ind["rsi"]:.1f})')
-        elif ind['rsi'] > RSI_OVERBOUGHT:
-            signal = 'SELL'
-            strength += 2
-            reasons.append(f'RSI Overbought ({ind["rsi"]:.1f})')
-
-        # MA Crossover
-        if ind['ma20'] > ind['ma50'] and ind['price'] > ind['ma20']:
-            if signal == 'HOLD':
-                signal = 'BUY'
-            strength += 1
-            reasons.append('Golden Cross (MA20 > MA50)')
-        elif ind['ma20'] < ind['ma50'] and ind['price'] < ind['ma20']:
-            if signal == 'HOLD':
-                signal = 'SELL'
-            strength += 1
-            reasons.append('Death Cross (MA20 < MA50)')
-
-        # Volume Signal
-        if ind['volume_ratio'] > 2.0:
-            if signal == 'HOLD':
-                signal = 'BUY' if ind['change'] > 0 else 'SELL'
-            strength += 1
-            reasons.append(f'Volume Tinggi ({ind["volume_ratio"]:.1f}x)')
-
-        # Price Breakout
-        if ind['price'] > ind['high'] * 1.02:
-            if signal == 'HOLD':
-                signal = 'BUY'
-            strength += 1
-            reasons.append('Breakout Resistance')
-        elif ind['price'] < ind['low'] * 0.98:
-            if signal == 'HOLD':
-                signal = 'SELL'
-            strength += 1
-            reasons.append('Breakdown Support')
-
-        return {
-            'symbol': symbol,
-            'price': ind['price'],
-            'change': ind['change'],
-            'rsi': ind['rsi'],
-            'volume': ind['volume'],
-            'ma20': ind['ma20'],
-            'ma50': ind['ma50'],
-            'signal': signal,
-            'strength': strength,
-            'reason': ', '.join(reasons) if reasons else 'Tidak ada sinyal kuat'
-        }
-
-    def check_all_signals(self) -> Dict[str, Dict]:
-        """
-        Cek sinyal untuk semua saham
-        """
+    def check_all_signals(self):
         signals = {}
         for symbol in self.screener.watchlist:
             try:
@@ -528,462 +353,256 @@ class SignalGenerator:
                 if signal:
                     signals[symbol] = signal
             except Exception as e:
-                logger.error(f"Error generating signal for {symbol}: {str(e)}")
+                logger.error(f"Error check signal {symbol}: {str(e)}")
         return signals
 
 # ============================================
-# CHART GENERATOR
-# ============================================
-
-class ChartGenerator:
-    """Pembuat chart saham"""
-    
-    def __init__(self):
-        self.chart_dir = 'charts'
-        os.makedirs(self.chart_dir, exist_ok=True)
-
-    def create_chart(self, symbol: str, period: str = '1mo') -> Optional[str]:
-        """
-        Membuat chart untuk saham
-        """
-        try:
-            ticker = yf.Ticker(f"{symbol}.JK")
-            data = ticker.history(period=period)
-            
-            if data.empty:
-                logger.warning(f"Data kosong untuk chart {symbol}")
-                return None
-
-            # Setup figure
-            fig, (ax1, ax2) = plt.subplots(
-                2, 1, 
-                figsize=(12, 8), 
-                gridspec_kw={'height_ratios': [3, 1]},
-                facecolor='white'
-            )
-            
-            # ===== Price Chart =====
-            # Price line
-            ax1.plot(data.index, data['Close'], 
-                    label='Close', color='#1f77b4', linewidth=2)
-            
-            # Moving averages
-            ax1.plot(data.index, data['Close'].rolling(window=20).mean(), 
-                    label='MA20', color='#ff7f0e', linestyle='--', linewidth=1.5)
-            ax1.plot(data.index, data['Close'].rolling(window=50).mean(), 
-                    label='MA50', color='#d62728', linestyle='--', linewidth=1.5)
-            
-            # Volume bars
-            ax1.bar(data.index, data['Volume'], 
-                   alpha=0.2, color='#7f7f7f', label='Volume')
-            
-            # Format
-            ax1.set_title(f'{symbol} - {get_company_name(symbol)}', 
-                         fontsize=14, fontweight='bold', pad=10)
-            ax1.set_ylabel('Harga (Rp)', fontsize=11)
-            ax1.legend(loc='upper left')
-            ax1.grid(True, alpha=0.2)
-            
-            # X-axis format
-            ax1.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
-            ax1.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
-            
-            # ===== RSI Chart =====
-            # Calculate RSI
-            delta = data['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs))
-            
-            # Plot RSI
-            ax2.plot(data.index, rsi, label='RSI', color='#9467bd', linewidth=2)
-            
-            # RSI levels
-            ax2.axhline(y=70, color='#d62728', linestyle='--', alpha=0.5, label='Overbought')
-            ax2.axhline(y=30, color='#2ca02c', linestyle='--', alpha=0.5, label='Oversold')
-            ax2.fill_between(data.index, 30, 70, alpha=0.1, color='gray')
-            
-            # Format
-            ax2.set_title('RSI (14)', fontsize=12)
-            ax2.set_ylabel('RSI', fontsize=11)
-            ax2.set_ylim(0, 100)
-            ax2.legend(loc='upper left')
-            ax2.grid(True, alpha=0.2)
-            
-            # X-axis format
-            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
-            ax2.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
-            
-            # Layout
-            plt.tight_layout()
-            
-            # Save chart
-            filename = f"{self.chart_dir}/{symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-            plt.savefig(filename, dpi=100, bbox_inches='tight', facecolor='white')
-            plt.close()
-            
-            # Cleanup old charts
-            self._cleanup_old_charts(symbol)
-            
-            logger.info(f"📊 Chart {symbol} berhasil dibuat")
-            return filename
-            
-        except Exception as e:
-            logger.error(f"Error creating chart {symbol}: {str(e)}")
-            return None
-
-    def _cleanup_old_charts(self, symbol: str, keep: int = 5) -> None:
-        """Hapus chart lama"""
-        try:
-            files = [f for f in os.listdir(self.chart_dir) if f.startswith(symbol)]
-            if len(files) > keep:
-                files.sort()
-                for f in files[:-keep]:
-                    os.remove(os.path.join(self.chart_dir, f))
-                    logger.debug(f"🗑️ Hapus chart lama: {f}")
-        except Exception as e:
-            logger.warning(f"Error cleanup charts: {str(e)}")
-
-# ============================================
-# BOT UTAMA
+# BOT UTAMA DENGAN AUTO-RESTART
 # ============================================
 
 class SahamBot:
-    """Bot Telegram utama"""
-    
     def __init__(self):
         self.bot = Bot(token=TELEGRAM_TOKEN)
         self.screener = Screener()
         self.signal_gen = SignalGenerator()
-        self.chart_gen = ChartGenerator()
         self.watchlist = WATCHLIST.copy()
         self.running = False
         self.job = None
         self.start_time = datetime.now()
-        self.stats = {
-            'total_commands': 0,
-            'last_command': None,
-            'signals_sent': 0
-        }
-        
-        logger.info("✅ Bot Saham Danar v2.0 siap digunakan")
-
-    def _update_stats(self, command: str) -> None:
-        """Update statistik"""
-        self.stats['total_commands'] += 1
-        self.stats['last_command'] = {
-            'command': command,
-            'time': get_timestamp(),
-            'user': None
-        }
-
-    # ============================================
-    # COMMAND HANDLERS
-    # ============================================
+        self.error_count = 0
+        self.max_errors = 10
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /start"""
-        self._update_stats('start')
-        
-        welcome_msg = f"""
-🤖 *Bot Saham Danar v2.0*
-
-📊 Bot monitoring saham Indonesia dengan sinyal trading otomatis.
-
-*📋 Perintah yang tersedia:*
-/start - Menampilkan menu utama
-/help - Bantuan lengkap
-/screener - Screening semua saham
-/watchlist - Daftar saham yang dimonitor
-/add SYMBOL - Tambah saham ke watchlist
-/remove SYMBOL - Hapus saham dari watchlist
-/signal SYMBOL - Cek sinyal saham
-/chart SYMBOL - Tampilkan chart saham
-/top - Top 5 saham berdasarkan volume
-/check - Cek semua sinyal
-/stats - Statistik bot
-/refresh - Refresh data cache
-/start_bot - Mulai monitoring otomatis
-/stop_bot - Stop monitoring otomatis
-
-*📊 Status:*
-🟢 Bot Online
-📋 Watchlist: {len(self.watchlist)} saham
-🕐 Uptime: {get_uptime(self.start_time)}
-        """
-        await update.message.reply_text(welcome_msg, parse_mode='Markdown')
+        await update.message.reply_text(
+            f"🤖 *Bot Saham Danar v2.1*\n\n"
+            f"📊 Bot monitoring saham Indonesia\n"
+            f"📋 Watchlist: {len(self.watchlist)} saham\n"
+            f"🕐 Uptime: {self.get_uptime()}\n\n"
+            f"Perintah: /help untuk bantuan",
+            parse_mode='Markdown'
+        )
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /help"""
-        self._update_stats('help')
-        
-        help_msg = """
-📚 *Bantuan Bot Saham Danar*
+        await update.message.reply_text(
+            "📚 *Bantuan Bot*\n\n"
+            "/start - Menu utama\n"
+            "/screener - Screening saham\n"
+            "/watchlist - Daftar saham\n"
+            "/add SYMBOL - Tambah saham\n"
+            "/remove SYMBOL - Hapus saham\n"
+            "/signal SYMBOL - Cek sinyal\n"
+            "/chart SYMBOL - Chart saham\n"
+            "/top - Top 5 volume\n"
+            "/check - Cek semua sinyal\n"
+            "/stats - Statistik bot\n"
+            "/refresh - Refresh data\n"
+            "/start_bot - Mulai monitoring\n"
+            "/stop_bot - Stop monitoring",
+            parse_mode='Markdown'
+        )
 
-*🎯 Cara Penggunaan:*
-1. Tambahkan saham ke watchlist: `/add BBCA`
-2. Cek sinyal: `/signal BBCA`  
-3. Aktifkan monitoring: `/start_bot`
-4. Bot akan kirim notifikasi saat ada sinyal
-
-*📊 Sumber Data:*
-• Yahoo Finance (real-time)
-• Cache diperbarui setiap 5 menit
-
-*💡 Tips:*
-• Gunakan `/screener` untuk melihat semua saham potensial
-• Aktifkan notifikasi di channel untuk update real-time
-• Data disimpan di cache untuk performa lebih baik
-
-*⚠️ Disclaimer:*
-Bot ini hanya untuk informasi, bukan rekomendasi investasi.
-Lakukan riset sendiri sebelum mengambil keputusan trading.
-        """
-        await update.message.reply_text(help_msg, parse_mode='Markdown')
+    def get_uptime(self):
+        delta = datetime.now() - self.start_time
+        days = delta.days
+        hours = delta.seconds // 3600
+        minutes = (delta.seconds % 3600) // 60
+        if days > 0:
+            return f"{days}d {hours}h {minutes}m"
+        return f"{hours}h {minutes}m"
 
     async def screener(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /screener"""
-        self._update_stats('screener')
-        
-        msg = await update.message.reply_text("🔍 *Sedang melakukan screening...*", parse_mode='Markdown')
-        
+        msg = await update.message.reply_text("🔍 *Screening...*", parse_mode='Markdown')
         try:
             results = self.screener.screen_all()
             if not results:
-                await msg.edit_text("⚠️ Tidak ada saham yang memenuhi kriteria saat ini.")
+                await msg.edit_text("⚠️ Tidak ada hasil.")
                 return
-                
-            message = "📊 *Hasil Screener Saham*\n\n"
+
+            message = "📊 *Hasil Screener*\n\n"
             for stock in results[:10]:
-                score_emoji = "🔴" if stock['score'] < 0 else "🟢" if stock['score'] > 0 else "⚪"
-                message += f"{score_emoji} *{stock['symbol']}* - {stock['company']}\n"
-                message += f"   💰 {format_price(stock['price'])} ({stock['change']:+.2f}%)\n"
-                message += f"   📊 Vol: {format_volume(stock['volume'])}\n"
-                message += f"   📈 RSI: {stock['rsi']:.1f}\n"
-                message += f"   ⭐ Score: {stock['score']}\n\n"
-                
+                emoji = "🟢" if stock['score'] > 0 else "🔴" if stock['score'] < 0 else "⚪"
+                message += f"{emoji} *{stock['symbol']}*: {format_price(stock['price'])} ({stock['change']:+.2f}%)\n"
+                message += f"   RSI: {stock['rsi']:.1f} | Score: {stock['score']}\n\n"
+
             await msg.edit_text(message, parse_mode='Markdown')
-            
         except Exception as e:
-            logger.error(f"Screener error: {str(e)}")
             await msg.edit_text(f"❌ Error: {str(e)}")
 
     async def watchlist(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /watchlist"""
-        self._update_stats('watchlist')
-        
         if not self.watchlist:
-            await update.message.reply_text("📋 Watchlist kosong. Tambahkan dengan /add SYMBOL")
+            await update.message.reply_text("📋 Watchlist kosong.")
             return
-            
-        message = "📋 *Watchlist Saham*\n\n"
+
+        message = "📋 *Watchlist*\n\n"
         for symbol in self.watchlist:
-            price_data = self.screener.get_latest_price(symbol)
-            if price_data:
-                change_emoji = "🟢" if price_data['change'] >= 0 else "🔴"
-                message += f"{change_emoji} *{symbol}* ({get_company_name(symbol)})\n"
-                message += f"   💰 {format_price(price_data['price'])} ({price_data['change']:+.2f}%)\n"
+            price = self.screener.get_latest_price(symbol)
+            if price:
+                emoji = "🟢" if price['change'] >= 0 else "🔴"
+                message += f"{emoji} *{symbol}*: {format_price(price['price'])} ({price['change']:+.2f}%)\n"
             else:
                 message += f"❌ *{symbol}*: Data tidak tersedia\n"
-            message += "\n"
-                
+
         await update.message.reply_text(message, parse_mode='Markdown')
 
     async def add(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /add SYMBOL"""
-        self._update_stats('add')
-        
         if not context.args:
-            await update.message.reply_text("❌ Gunakan: /add SYMBOL (contoh: /add BBCA)")
+            await update.message.reply_text("❌ Gunakan: /add SYMBOL")
             return
-            
+
         symbol = context.args[0].upper()
-        if not is_valid_symbol(symbol):
-            await update.message.reply_text("❌ Kode saham tidak valid! Gunakan 3-5 huruf kapital.")
-            return
-            
         if symbol not in self.watchlist:
             self.watchlist.append(symbol)
             self.screener.watchlist = self.watchlist
-            await update.message.reply_text(f"✅ *{symbol}* ({get_company_name(symbol)}) berhasil ditambahkan ke watchlist!", parse_mode='Markdown')
+            await update.message.reply_text(f"✅ *{symbol}* ditambahkan!", parse_mode='Markdown')
         else:
-            await update.message.reply_text(f"ℹ️ *{symbol}* sudah ada di watchlist.", parse_mode='Markdown')
+            await update.message.reply_text(f"ℹ️ *{symbol}* sudah ada.", parse_mode='Markdown')
 
     async def remove(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /remove SYMBOL"""
-        self._update_stats('remove')
-        
         if not context.args:
-            await update.message.reply_text("❌ Gunakan: /remove SYMBOL (contoh: /remove BBCA)")
+            await update.message.reply_text("❌ Gunakan: /remove SYMBOL")
             return
-            
+
         symbol = context.args[0].upper()
         if symbol in self.watchlist:
             self.watchlist.remove(symbol)
             self.screener.watchlist = self.watchlist
-            await update.message.reply_text(f"✅ *{symbol}* berhasil dihapus dari watchlist!", parse_mode='Markdown')
+            await update.message.reply_text(f"✅ *{symbol}* dihapus!", parse_mode='Markdown')
         else:
-            await update.message.reply_text(f"❌ *{symbol}* tidak ditemukan di watchlist.", parse_mode='Markdown')
+            await update.message.reply_text(f"❌ *{symbol}* tidak ditemukan.", parse_mode='Markdown')
 
     async def signal(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /signal SYMBOL"""
-        self._update_stats('signal')
-        
         if not context.args:
-            await update.message.reply_text("❌ Gunakan: /signal SYMBOL (contoh: /signal BBCA)")
+            await update.message.reply_text("❌ Gunakan: /signal SYMBOL")
             return
-            
+
         symbol = context.args[0].upper()
         msg = await update.message.reply_text(f"📈 *Menganalisis {symbol}...*", parse_mode='Markdown')
-        
+
         try:
             signal = self.signal_gen.generate_signal(symbol)
             if not signal:
-                await msg.edit_text(f"❌ Data untuk *{symbol}* tidak tersedia.", parse_mode='Markdown')
+                await msg.edit_text(f"❌ Data *{symbol}* tidak tersedia.", parse_mode='Markdown')
                 return
-                
+
             signal_emoji = "🟢" if signal['signal'] == 'BUY' else "🔴" if signal['signal'] == 'SELL' else "⚪"
             signal_text = "🔴 *JUAL*" if signal['signal'] == 'SELL' else "🟢 *BELI*" if signal['signal'] == 'BUY' else "⚪ *TAHAN*"
-                
-            message = f"📊 *Analisis {symbol}* - {get_company_name(symbol)}\n\n"
-            message += f"💰 Harga: {format_price(signal['price'])}\n"
-            message += f"📊 Perubahan: {signal['change']:+.2f}%\n"
+
+            message = f"📊 *Analisis {symbol}*\n\n"
+            message += f"💰 {format_price(signal['price'])}\n"
+            message += f"📊 {signal['change']:+.2f}%\n"
             message += f"📈 RSI: {signal['rsi']:.1f}\n"
-            message += f"📊 Volume: {format_volume(signal['volume'])}\n"
-            message += f"📉 MA20: {format_price(signal['ma20'])}\n"
-            message += f"📉 MA50: {format_price(signal['ma50'])}\n\n"
-            message += f"🎯 *Rekomendasi:* {signal_text}\n"
-            message += f"💡 *Alasan:* {signal['reason']}\n"
-            message += f"💪 *Strength:* {signal['strength']}/5"
-            
+            message += f"📊 Vol: {format_volume(signal['volume'])}\n\n"
+            message += f"🎯 {signal_text}\n"
+            message += f"💡 {signal['reason']}"
+
             await msg.edit_text(message, parse_mode='Markdown')
-            
         except Exception as e:
-            logger.error(f"Signal error: {str(e)}")
             await msg.edit_text(f"❌ Error: {str(e)}")
 
     async def chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /chart SYMBOL"""
-        self._update_stats('chart')
-        
         if not context.args:
-            await update.message.reply_text("❌ Gunakan: /chart SYMBOL (contoh: /chart BBCA)")
+            await update.message.reply_text("❌ Gunakan: /chart SYMBOL")
             return
-            
+
         symbol = context.args[0].upper()
-        msg = await update.message.reply_text(f"📊 *Membuat chart untuk {symbol}...*", parse_mode='Markdown')
-        
+        msg = await update.message.reply_text(f"📊 *Membuat chart {symbol}...*", parse_mode='Markdown')
+
         try:
-            chart_path = self.chart_gen.create_chart(symbol)
-            if chart_path:
-                with open(chart_path, 'rb') as photo:
-                    await update.message.reply_photo(
-                        photo=photo, 
-                        caption=f"📈 Chart {symbol} - {get_company_name(symbol)}\n🕐 {get_timestamp()}"
-                    )
-                os.remove(chart_path)
-                await msg.delete()
-            else:
-                await msg.edit_text(f"❌ Gagal membuat chart untuk *{symbol}*.", parse_mode='Markdown')
+            ticker = yf.Ticker(f"{symbol}.JK")
+            data = ticker.history(period='1mo')
+            
+            if data.empty:
+                await msg.edit_text(f"❌ Data *{symbol}* tidak tersedia.", parse_mode='Markdown')
+                return
+
+            # Buat chart sederhana
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(data.index, data['Close'], label='Close', linewidth=2)
+            ax.set_title(f'{symbol} - Price Chart')
+            ax.set_ylabel('Price')
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+
+            # Simpan
+            filename = f"chart_{symbol}.png"
+            plt.savefig(filename, dpi=80, bbox_inches='tight')
+            plt.close()
+
+            # Kirim
+            with open(filename, 'rb') as photo:
+                await update.message.reply_photo(photo=photo, caption=f"📈 Chart {symbol}")
+            
+            os.remove(filename)
+            await msg.delete()
+
         except Exception as e:
-            logger.error(f"Chart error: {str(e)}")
             await msg.edit_text(f"❌ Error: {str(e)}")
 
     async def top(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /top"""
-        self._update_stats('top')
-        
-        msg = await update.message.reply_text("📊 *Mencari saham dengan volume tertinggi...*", parse_mode='Markdown')
-        
+        msg = await update.message.reply_text("📊 *Mencari volume tertinggi...*", parse_mode='Markdown')
+
         try:
             top_stocks = self.screener.get_top_by_volume(5)
             if not top_stocks:
                 await msg.edit_text("❌ Data tidak tersedia.")
                 return
-                
-            message = "🔥 *Top 5 Saham Berdasarkan Volume*\n\n"
+
+            message = "🔥 *Top 5 Volume*\n\n"
             for i, stock in enumerate(top_stocks, 1):
-                change_emoji = "🟢" if stock['change'] >= 0 else "🔴"
-                message += f"{i}. {change_emoji} *{stock['symbol']}*\n"
+                emoji = "🟢" if stock['change'] >= 0 else "🔴"
+                message += f"{i}. {emoji} *{stock['symbol']}*\n"
                 message += f"   💰 {format_price(stock['price'])}\n"
-                message += f"   📊 Vol: {format_volume(stock['volume'])}\n"
-                message += f"   📈 {stock['change']:+.2f}%\n\n"
-                
+                message += f"   📊 Vol: {format_volume(stock['volume'])}\n\n"
+
             await msg.edit_text(message, parse_mode='Markdown')
         except Exception as e:
             await msg.edit_text(f"❌ Error: {str(e)}")
 
     async def check(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /check"""
-        self._update_stats('check')
-        
-        msg = await update.message.reply_text("🔍 *Mengecek semua sinyal...*", parse_mode='Markdown')
-        
+        msg = await update.message.reply_text("🔍 *Mengecek sinyal...*", parse_mode='Markdown')
+
         try:
             signals = self.signal_gen.check_all_signals()
             if not signals:
-                await msg.edit_text("✅ Tidak ada sinyal yang terdeteksi saat ini.")
+                await msg.edit_text("✅ Tidak ada sinyal.")
                 return
-                
-            buy_signals = [s for s in signals.values() if s['signal'] == 'BUY']
-            sell_signals = [s for s in signals.values() if s['signal'] == 'SELL']
-            
-            message = "📊 *Hasil Pengecekan Sinyal*\n\n"
-            message += f"🟢 BELI: {len(buy_signals)}\n"
-            message += f"🔴 JUAL: {len(sell_signals)}\n"
-            message += f"⚪ TAHAN: {len(signals) - len(buy_signals) - len(sell_signals)}\n\n"
-            
-            if buy_signals:
+
+            buy = [s for s in signals.values() if s['signal'] == 'BUY']
+            sell = [s for s in signals.values() if s['signal'] == 'SELL']
+
+            message = f"📊 *Hasil Pengecekan*\n\n"
+            message += f"🟢 BELI: {len(buy)}\n"
+            message += f"🔴 JUAL: {len(sell)}\n"
+            message += f"⚪ TAHAN: {len(signals) - len(buy) - len(sell)}\n\n"
+
+            if buy:
                 message += "*🟢 Sinyal BELI:*\n"
-                for s in buy_signals[:5]:
-                    message += f"• *{s['symbol']}* - {s['reason']} (strength: {s['strength']})\n"
-                    
-            if sell_signals:
+                for s in buy[:5]:
+                    message += f"• *{s['symbol']}* - {s['reason']}\n"
+
+            if sell:
                 message += "\n*🔴 Sinyal JUAL:*\n"
-                for s in sell_signals[:5]:
-                    message += f"• *{s['symbol']}* - {s['reason']} (strength: {s['strength']})\n"
-                    
+                for s in sell[:5]:
+                    message += f"• *{s['symbol']}* - {s['reason']}\n"
+
             await msg.edit_text(message, parse_mode='Markdown')
         except Exception as e:
             await msg.edit_text(f"❌ Error: {str(e)}")
 
     async def stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /stats"""
-        self._update_stats('stats')
-        
-        watchlist_count = len(self.watchlist)
-        
-        stats_msg = f"""
-📊 *Statistik Bot Saham Danar v2.0*
-
-🕐 Uptime: {get_uptime(self.start_time)}
-📋 Watchlist: {watchlist_count} saham
-🔄 Monitoring: {'✅ Aktif' if self.running else '⛔ Nonaktif'}
-
-*📊 Penggunaan:*
-📝 Total commands: {self.stats['total_commands']}
-📬 Signals sent: {self.stats['signals_sent']}
-🕐 Last command: {self.stats['last_command']['command'] if self.stats['last_command'] else 'Belum ada'}
-
-*📈 Data:*
-🗃️ Cache: {len(self.screener.cache)} items
-📊 Total saham: {len(WATCHLIST)}
-🔄 Last update: {get_timestamp()}
-
-*🖥️ Server:*
-🐍 Python: {sys.version.split()[0]}
-📦 Platform: Railway.app
-🌍 Environment: {ENVIRONMENT}
-        """
-        await update.message.reply_text(stats_msg, parse_mode='Markdown')
+        await update.message.reply_text(
+            f"📊 *Statistik Bot*\n\n"
+            f"🕐 Uptime: {self.get_uptime()}\n"
+            f"📋 Watchlist: {len(self.watchlist)} saham\n"
+            f"🔄 Monitoring: {'✅ Aktif' if self.running else '⛔ Nonaktif'}\n"
+            f"📦 Cache: {len(self.screener.cache)} items\n"
+            f"❌ Error: {self.error_count}\n"
+            f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            parse_mode='Markdown'
+        )
 
     async def refresh(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /refresh"""
-        self._update_stats('refresh')
-        
-        msg = await update.message.reply_text("🔄 *Merefresh data cache...*", parse_mode='Markdown')
-        
+        msg = await update.message.reply_text("🔄 *Refresh data...*", parse_mode='Markdown')
         try:
             self.screener.clear_cache()
             await msg.edit_text("✅ *Data cache berhasil direfresh!*", parse_mode='Markdown')
@@ -991,135 +610,87 @@ Lakukan riset sendiri sebelum mengambil keputusan trading.
             await msg.edit_text(f"❌ Error: {str(e)}")
 
     async def start_bot(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /start_bot"""
-        self._update_stats('start_bot')
-        
         if not self.running:
             self.running = True
             self.job = context.job_queue.run_repeating(
                 self._monitor_stocks,
-                interval=300,  # 5 menit
+                interval=300,
                 first=10
             )
             await update.message.reply_text(
-                "✅ *Monitoring otomatis dimulai!*\n"
-                "Bot akan mengecek sinyal setiap 5 menit.\n"
-                "Notifikasi akan dikirim ke channel jika ada sinyal.",
+                "✅ *Monitoring dimulai!*\n"
+                "Cek sinyal setiap 5 menit.",
                 parse_mode='Markdown'
             )
         else:
-            await update.message.reply_text(
-                "⚠️ Monitoring sudah aktif.\n"
-                f"Interval: {self.job.interval if self.job else 300} detik",
-                parse_mode='Markdown'
-            )
+            await update.message.reply_text("⚠️ Monitoring sudah aktif.", parse_mode='Markdown')
 
     async def stop_bot(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler /stop_bot"""
-        self._update_stats('stop_bot')
-        
         if self.running and self.job:
             self.running = False
             self.job.schedule_removal()
             self.job = None
-            await update.message.reply_text(
-                "⏹️ *Monitoring otomatis dihentikan.*",
-                parse_mode='Markdown'
-            )
+            await update.message.reply_text("⏹️ *Monitoring dihentikan.*", parse_mode='Markdown')
         else:
-            await update.message.reply_text(
-                "ℹ️ Monitoring tidak aktif.",
-                parse_mode='Markdown'
-            )
-
-    # ============================================
-    # MONITORING FUNCTION
-    # ============================================
+            await update.message.reply_text("ℹ️ Monitoring tidak aktif.", parse_mode='Markdown')
 
     async def _monitor_stocks(self, context: ContextTypes.DEFAULT_TYPE):
-        """Fungsi monitoring otomatis"""
+        """Monitoring dengan error handling"""
         try:
-            logger.info("🔄 Running automatic monitoring...")
+            logger.info("🔄 Running monitoring...")
             signals = self.signal_gen.check_all_signals()
-            
-            for symbol, signal in signals.items():
-                if symbol in self.watchlist and signal['signal'] != 'HOLD':
-                    # Cek apakah sinyal cukup kuat
-                    if signal['strength'] < 2:
-                        continue
-                        
-                    signal_emoji = "🟢" if signal['signal'] == 'BUY' else "🔴"
-                    message = f"{signal_emoji} *SINYAL {signal['signal']} - {symbol}*\n\n"
-                    message += f"💰 {format_price(signal['price'])}\n"
-                    message += f"📊 {signal['change']:+.2f}%\n"
-                    message += f"📈 RSI: {signal['rsi']:.1f}\n"
-                    message += f"💪 Strength: {signal['strength']}/5\n"
-                    message += f"💡 {signal['reason']}\n"
-                    message += f"🕐 {get_timestamp()}"
 
+            for symbol, signal in signals.items():
+                if symbol in self.watchlist and signal['signal'] != 'HOLD' and signal['strength'] >= 2:
                     if CHANNEL_ID:
                         try:
+                            message = f"🟢 *SINYAL {signal['signal']} - {symbol}*\n\n"
+                            message += f"💰 {format_price(signal['price'])}\n"
+                            message += f"📊 {signal['change']:+.2f}%\n"
+                            message += f"💡 {signal['reason']}"
+
                             await self.bot.send_message(
                                 chat_id=CHANNEL_ID,
                                 text=message,
                                 parse_mode='Markdown'
                             )
-                            self.stats['signals_sent'] += 1
-                            logger.info(f"📬 Signal sent for {symbol}: {signal['signal']}")
-                            
-                            # Kirim chart untuk sinyal kuat
-                            if signal['strength'] >= 3:
-                                chart_path = self.chart_gen.create_chart(symbol)
-                                if chart_path:
-                                    with open(chart_path, 'rb') as photo:
-                                        await self.bot.send_photo(
-                                            chat_id=CHANNEL_ID,
-                                            photo=photo,
-                                            caption=f"📈 Chart {symbol}"
-                                        )
-                                    os.remove(chart_path)
-                                    
+                            logger.info(f"📬 Signal sent: {symbol}")
                         except Exception as e:
-                            logger.error(f"Error sending signal for {symbol}: {str(e)}")
-                            
-        except Exception as e:
-            logger.error(f"Error in monitoring: {str(e)}")
-            logger.error(traceback.format_exc())
+                            logger.error(f"Error sending signal: {str(e)}")
 
-    # ============================================
-    # ERROR HANDLER
-    # ============================================
+        except Exception as e:
+            logger.error(f"Error monitoring: {str(e)}")
+            self.error_count += 1
 
     async def _error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler untuk error"""
-        logger.error(f"Update {update} caused error: {context.error}")
-        logger.error(traceback.format_exc())
+        """Error handler dengan auto-restart"""
+        logger.error(f"Error: {context.error}")
+        self.error_count += 1
         
         try:
             if update and update.effective_message:
                 await update.effective_message.reply_text(
-                    "❌ Terjadi kesalahan. Tim pengembang telah diberitahu.\n"
-                    "Silakan coba lagi nanti."
+                    "❌ Terjadi kesalahan. Bot akan mencoba pulih..."
                 )
         except:
             pass
 
-    # ============================================
-    # RUN BOT
-    # ============================================
+        # Auto-restart jika terlalu banyak error
+        if self.error_count > self.max_errors:
+            logger.warning(f"⚠️ Terlalu banyak error ({self.error_count}), restarting...")
+            self.error_count = 0
+            sys.exit(0)  # Railway akan auto-restart
 
     def run(self):
-        """Menjalankan bot"""
+        """Menjalankan bot dengan auto-recovery"""
         try:
-            # Create directories
-            os.makedirs('charts', exist_ok=True)
             os.makedirs('data', exist_ok=True)
+            os.makedirs('charts', exist_ok=True)
             os.makedirs('logs', exist_ok=True)
 
-            # Setup application
             application = Application.builder().token(TELEGRAM_TOKEN).build()
 
-            # Register command handlers
+            # Register commands
             application.add_handler(CommandHandler("start", self.start))
             application.add_handler(CommandHandler("help", self.help))
             application.add_handler(CommandHandler("screener", self.screener))
@@ -1135,41 +706,38 @@ Lakukan riset sendiri sebelum mengambil keputusan trading.
             application.add_handler(CommandHandler("start_bot", self.start_bot))
             application.add_handler(CommandHandler("stop_bot", self.stop_bot))
 
-            # Error handler
             application.add_error_handler(self._error_handler)
 
-            # Run
-            logger.info(f"🚀 Starting bot on port {PORT}...")
-            print("=" * 70)
-            print("🚀 BOT BERJALAN!")
-            print(f"📌 Bot: @{(application.bot.get_me()).username}")
+            logger.info("🚀 Bot starting...")
+            print("=" * 60)
+            print("🤖 BOT SAHAM DANAR v2.1 - ANTI CRASH")
+            print("=" * 60)
+            print(f"📌 Token: ✓")
             print(f"📌 Watchlist: {len(self.watchlist)} saham")
-            print(f"📌 Port: {PORT}")
-            print("=" * 70)
-            
+            print(f"📌 Auto-recovery: Aktif")
+            print("=" * 60)
+
             application.run_polling(
                 allowed_updates=Update.ALL_TYPES,
                 drop_pending_updates=True,
                 poll_interval=2.0,
                 timeout=30
             )
-            
+
         except Exception as e:
             logger.error(f"Fatal error: {str(e)}")
             logger.error(traceback.format_exc())
+            time.sleep(5)
             sys.exit(1)
-
-# ============================================
-# MAIN
-# ============================================
 
 if __name__ == '__main__':
     try:
         bot = SahamBot()
         bot.run()
     except KeyboardInterrupt:
-        print("\n⏹️ Bot dihentikan oleh user")
+        print("\n⏹️ Bot dihentikan")
         sys.exit(0)
     except Exception as e:
-        print(f"\n❌ Fatal error: {str(e)}")
+        print(f"\n❌ Fatal: {str(e)}")
+        time.sleep(5)
         sys.exit(1)
