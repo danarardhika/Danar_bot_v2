@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """
-Bot Saham Danar v2.3 - Dengan Data Realistis & Chart Custom
+Bot Saham Danar v2.3 - ALL IN ONE
+Semua kode dalam 1 file (tanpa import chart.py)
 """
 
 import os
@@ -26,9 +27,6 @@ from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from dotenv import load_dotenv
 
-# Import chart generator
-from chart import ChartGenerator
-
 # ============================================
 # KONFIGURASI
 # ============================================
@@ -44,7 +42,7 @@ CHANNEL_ID = os.getenv('CHANNEL_ID', '')
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'production')
 PORT = int(os.getenv('PORT', 8080))
 
-# Watchlist dengan data realistis
+# Watchlist
 watchlist_str = os.getenv('WATCHLIST', '')
 if watchlist_str:
     WATCHLIST = [s.strip().upper() for s in watchlist_str.split(',') if s.strip()]
@@ -70,120 +68,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================
-# DATA REALISTIS (HARGA SAHAM INDONESIA)
+# DATA REALISTIS
 # ============================================
 
 REALISTIC_DATA = {
-    'BBCA': {
-        'price': 9750,
-        'change': 0.5,
-        'volume': 15000000,
-        'rsi': 55,
-        'ma20': 9650,
-        'ma50': 9500,
-        'high': 9800,
-        'low': 9600
-    },
-    'BBRI': {
-        'price': 4850,
-        'change': 0.3,
-        'volume': 20000000,
-        'rsi': 52,
-        'ma20': 4800,
-        'ma50': 4750,
-        'high': 4900,
-        'low': 4780
-    },
-    'BMRI': {
-        'price': 6250,
-        'change': 0.2,
-        'volume': 12000000,
-        'rsi': 50,
-        'ma20': 6200,
-        'ma50': 6150,
-        'high': 6300,
-        'low': 6180
-    },
-    'TLKM': {
-        'price': 3850,
-        'change': -0.1,
-        'volume': 18000000,
-        'rsi': 48,
-        'ma20': 3880,
-        'ma50': 3900,
-        'high': 3900,
-        'low': 3820
-    },
-    'ASII': {
-        'price': 7250,
-        'change': 0.8,
-        'volume': 8000000,
-        'rsi': 58,
-        'ma20': 7150,
-        'ma50': 7050,
-        'high': 7300,
-        'low': 7100
-    },
-    'UNVR': {
-        'price': 4250,
-        'change': -0.5,
-        'volume': 5000000,
-        'rsi': 45,
-        'ma20': 4300,
-        'ma50': 4350,
-        'high': 4350,
-        'low': 4200
-    },
-    'GOTO': {
-        'price': 82,
-        'change': -1.2,
-        'volume': 50000000,
-        'rsi': 40,
-        'ma20': 85,
-        'ma50': 88,
-        'high': 86,
-        'low': 80
-    },
-    'ADMR': {
-        'price': 1400,
-        'change': 1.5,
-        'volume': 3000000,
-        'rsi': 62,
-        'ma20': 1350,
-        'ma50': 1300,
-        'high': 1420,
-        'low': 1380
-    },
-    'BRPT': {
-        'price': 980,
-        'change': 0.7,
-        'volume': 4000000,
-        'rsi': 56,
-        'ma20': 960,
-        'ma50': 940,
-        'high': 1000,
-        'low': 970
-    },
-    'PTBA': {
-        'price': 3200,
-        'change': -0.3,
-        'volume': 6000000,
-        'rsi': 49,
-        'ma20': 3250,
-        'ma50': 3300,
-        'high': 3280,
-        'low': 3180
-    },
-    'BSDE': {
-        'price': 1050,
-        'change': 1.2,
-        'volume': 8000000,
-        'rsi': 60,
-        'ma20': 1020,
-        'ma50': 1000,
-        'high': 1080,
-        'low': 1010
-    }
+    'BBCA': {'price': 9750, 'change': 0.5, 'volume': 15000000, 'rsi': 55, 'ma20': 9650, 'ma50': 9500, 'high': 9800, 'low': 9600},
+    'BBRI': {'price': 4850, 'change': 0.3, 'volume': 20000000, 'rsi': 52, 'ma20': 4800, 'ma50': 4750, 'high': 4900, 'low': 4780},
+    'BMRI': {'price': 6250, 'change': 0.2, 'volume': 12000000, 'rsi': 50, 'ma20': 6200, 'ma50': 6150, 'high': 6300, 'low': 6180},
+    'TLKM': {'price': 3850, 'change': -0.1, 'volume': 18000000, 'rsi': 48, 'ma20': 3880, 'ma50': 3900, 'high': 3900, 'low': 3820},
+    'ASII': {'price': 7250, 'change': 0.8, 'volume': 8000000, 'rsi': 58, 'ma20': 7150, 'ma50': 7050, 'high': 7300, 'low': 7100},
+    'UNVR': {'price': 4250, 'change': -0.5, 'volume': 5000000, 'rsi': 45, 'ma20': 4300, 'ma50': 4350, 'high': 4350, 'low': 4200},
+    'GOTO': {'price': 82, 'change': -1.2, 'volume': 50000000, 'rsi': 40, 'ma20': 85, 'ma50': 88, 'high': 86, 'low': 80},
+    'ADMR': {'price': 1400, 'change': 1.5, 'volume': 3000000, 'rsi': 62, 'ma20': 1350, 'ma50': 1300, 'high': 1420, 'low': 1380},
+    'BRPT': {'price': 980, 'change': 0.7, 'volume': 4000000, 'rsi': 56, 'ma20': 960, 'ma50': 940, 'high': 1000, 'low': 970},
+    'PTBA': {'price': 3200, 'change': -0.3, 'volume': 6000000, 'rsi': 49, 'ma20': 3250, 'ma50': 3300, 'high': 3280, 'low': 3180},
+    'BSDE': {'price': 1050, 'change': 1.2, 'volume': 8000000, 'rsi': 60, 'ma20': 1020, 'ma50': 1000, 'high': 1080, 'low': 1010},
+    'SMGR': {'price': 1545, 'change': 0.5, 'volume': 84000, 'rsi': 60, 'ma20': 1526, 'ma50': 1500, 'high': 1555, 'low': 1525}
+}
+
+COMPANY_NAMES = {
+    'BBCA': 'Bank Central Asia',
+    'BBRI': 'Bank Rakyat Indonesia',
+    'BMRI': 'Bank Mandiri',
+    'TLKM': 'Telkom Indonesia',
+    'ASII': 'Astra International',
+    'UNVR': 'Unilever Indonesia',
+    'GOTO': 'GoTo Gojek Tokopedia',
+    'ADMR': 'Adaro Minerals',
+    'BRPT': 'Barito Pacific',
+    'PTBA': 'Bukit Asam',
+    'BSDE': 'Bumi Serpong Damai',
+    'SMGR': 'Semen Indonesia'
 }
 
 # ============================================
@@ -221,23 +136,8 @@ def safe_json_save(filepath, data):
     except:
         return False
 
-COMPANY_NAMES = {
-    'BBCA': 'Bank Central Asia',
-    'BBRI': 'Bank Rakyat Indonesia',
-    'BMRI': 'Bank Mandiri',
-    'TLKM': 'Telkom Indonesia',
-    'ASII': 'Astra International',
-    'UNVR': 'Unilever Indonesia',
-    'GOTO': 'GoTo Gojek Tokopedia',
-    'ADMR': 'Adaro Minerals',
-    'BRPT': 'Barito Pacific',
-    'PTBA': 'Bukit Asam',
-    'BSDE': 'Bumi Serpong Damai',
-    'SMGR': 'Semen Indonesia'
-}
-
 # ============================================
-# SCREENER DENGAN DATA REALISTIS
+# SCREENER
 # ============================================
 
 class Screener:
@@ -254,10 +154,8 @@ class Screener:
         safe_json_save(self.cache_file, self.cache)
 
     def get_stock_data(self, symbol, period='1mo', max_retries=2):
-        """Ambil data dengan fallback ke data realistis"""
         cache_key = f"{symbol}_{period}"
         
-        # Cek cache
         if cache_key in self.cache:
             cache_time = self.cache[cache_key].get('timestamp', '')
             if cache_time:
@@ -270,16 +168,13 @@ class Screener:
                 except:
                     pass
 
-        # Coba ambil dari Yahoo Finance
         for attempt in range(max_retries):
             try:
                 logger.info(f"📥 Mengambil data {symbol} (attempt {attempt+1}/{max_retries})")
-                
                 ticker = yf.Ticker(f"{symbol}.JK")
                 data = ticker.history(period=period, timeout=15)
                 
                 if not data.empty and len(data) > 5:
-                    # Validasi data
                     if data['Close'].iloc[-1] > 0 and data['Close'].iloc[-1] < 1000000:
                         self.cache[cache_key] = {
                             'timestamp': datetime.now().isoformat(),
@@ -289,67 +184,42 @@ class Screener:
                         self.use_fallback = False
                         return data
                     else:
-                        logger.warning(f"Data {symbol} tidak valid (harga: {data['Close'].iloc[-1]})")
-                        
+                        logger.warning(f"Data {symbol} tidak valid")
             except Exception as e:
-                logger.warning(f"Attempt {attempt+1} failed for {symbol}: {str(e)}")
-                self.last_error = str(e)
+                logger.warning(f"Attempt {attempt+1} failed: {str(e)}")
                 time.sleep(2)
 
-        # Jika semua gagal, gunakan data realistis
         logger.warning(f"⚠️ Menggunakan data realistis untuk {symbol}")
         self.use_fallback = True
         return self._create_realistic_data(symbol, period)
 
     def _create_realistic_data(self, symbol, period='1mo'):
-        """Buat data dari REALISTIC_DATA"""
         try:
-            # Ambil dari REALISTIC_DATA
             data = REALISTIC_DATA.get(symbol)
             if not data:
-                # Jika tidak ada, buat default
-                data = {
-                    'price': 5000,
-                    'change': 0,
-                    'volume': 10000000,
-                    'rsi': 50,
-                    'ma20': 5000,
-                    'ma50': 5000,
-                    'high': 5100,
-                    'low': 4900
-                }
+                data = {'price': 5000, 'change': 0, 'volume': 10000000, 'rsi': 50, 'ma20': 5000, 'ma50': 5000, 'high': 5100, 'low': 4900}
             
-            # Buat dataframe dengan 30 hari
             dates = pd.date_range(end=datetime.now(), periods=30, freq='D')
-            
-            # Generate harga dengan variasi kecil
             base_price = data['price']
             prices = []
             for i in range(30):
-                # Fluktuasi harian -2% sampai +2%
                 change = random.uniform(-0.02, 0.02)
                 if i == 0:
                     prices.append(base_price)
                 else:
                     prices.append(prices[-1] * (1 + change))
             
-            # Pastikan harga terakhir sesuai dengan data
             last_price = prices[-1]
             prices = [p * (data['price'] / last_price) for p in prices]
-            
-            # Volume dengan variasi
             volumes = [data['volume'] * random.uniform(0.6, 1.4) for _ in range(30)]
             
-            df = pd.DataFrame({
+            return pd.DataFrame({
                 'Open': [p * random.uniform(0.98, 0.99) for p in prices],
                 'High': [p * random.uniform(1.01, 1.02) for p in prices],
                 'Low': [p * random.uniform(0.98, 0.99) for p in prices],
                 'Close': prices,
                 'Volume': volumes
             }, index=dates)
-            
-            return df
-            
         except Exception as e:
             logger.error(f"Error creating realistic data: {str(e)}")
             return None
@@ -361,7 +231,6 @@ class Screener:
         try:
             close = data['Close']
             
-            # RSI
             if len(close) >= 14:
                 delta = close.diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -372,7 +241,6 @@ class Screener:
             else:
                 rsi_val = 50
             
-            # MA
             if len(close) >= 20:
                 ma20_val = close.rolling(window=20).mean().iloc[-1]
             else:
@@ -383,18 +251,15 @@ class Screener:
             else:
                 ma50_val = close.iloc[-1]
             
-            # Volume
             if len(data) >= 10:
                 avg_volume = data['Volume'].rolling(window=10).mean().iloc[-1]
             else:
                 avg_volume = data['Volume'].iloc[-1]
             volume_ratio = data['Volume'].iloc[-1] / avg_volume if avg_volume > 0 else 1
             
-            # Change
             change = ((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2]) * 100 if len(close) > 1 else 0
             
-            # Pastikan angka tidak aneh
-            rsi_val = max(0, min(100, rsi_val))  # RSI antara 0-100
+            rsi_val = max(0, min(100, rsi_val))
             
             return {
                 'price': float(close.iloc[-1]),
@@ -418,12 +283,10 @@ class Screener:
                 data = self.get_stock_data(symbol)
                 if data is None or data.empty:
                     continue
-                    
                 ind = self.calculate_indicators(data)
                 if ind is None:
                     continue
 
-                # Skoring
                 score = 0
                 if ind['rsi'] < 30:
                     score += 2
@@ -517,7 +380,6 @@ class SignalGenerator:
             reasons = []
             strength = 0
 
-            # RSI
             if ind['rsi'] < 30:
                 signal = 'BUY'
                 strength += 2
@@ -527,7 +389,6 @@ class SignalGenerator:
                 strength += 2
                 reasons.append(f'RSI Overbought ({ind["rsi"]:.1f})')
 
-            # MA
             if ind['ma20'] > ind['ma50'] and ind['price'] > ind['ma20']:
                 if signal == 'HOLD':
                     signal = 'BUY'
@@ -539,14 +400,12 @@ class SignalGenerator:
                 strength += 1
                 reasons.append('Death Cross')
 
-            # Volume
             if ind['volume_ratio'] > 2.0:
                 if signal == 'HOLD':
                     signal = 'BUY' if ind['change'] > 0 else 'SELL'
                 strength += 1
                 reasons.append(f'Volume Tinggi ({ind["volume_ratio"]:.1f}x)')
 
-            # Price change
             if ind['change'] > 3:
                 if signal == 'HOLD':
                     signal = 'BUY'
@@ -586,6 +445,164 @@ class SignalGenerator:
         return signals
 
 # ============================================
+# CHART GENERATOR (LANGSUNG DI SINI)
+# ============================================
+
+class ChartGenerator:
+    def __init__(self):
+        self.chart_dir = 'charts'
+        os.makedirs(self.chart_dir, exist_ok=True)
+        plt.style.use('dark_background')
+        
+    def create_chart(self, symbol: str, period: str = '3mo') -> str:
+        """Membuat chart lengkap dengan indikator teknikal"""
+        try:
+            ticker = yf.Ticker(f"{symbol}.JK")
+            data = ticker.history(period=period)
+            
+            if data.empty or len(data) < 30:
+                logger.warning(f"Data tidak cukup untuk {symbol}")
+                return None
+            
+            # Buat figure dengan 4 subplot
+            fig = plt.figure(figsize=(16, 12))
+            fig.patch.set_facecolor('#0d1117')
+            gs = fig.add_gridspec(4, 1, height_ratios=[3, 1, 1, 1], hspace=0.15)
+            
+            # ===== PLOT 1: Harga =====
+            ax1 = fig.add_subplot(gs[0])
+            ax1.set_facecolor('#0d1117')
+            
+            ax1.plot(data.index, data['Close'], color='#00d4ff', linewidth=2, label='Close')
+            
+            sma20 = data['Close'].rolling(window=20).mean()
+            sma50 = data['Close'].rolling(window=50).mean()
+            ax1.plot(data.index, sma20, color='#ff6b6b', linewidth=1.5, linestyle='--', label='SMA 20')
+            ax1.plot(data.index, sma50, color='#ffd93d', linewidth=1.5, linestyle='--', label='SMA 50')
+            
+            bb_middle = data['Close'].rolling(window=20).mean()
+            bb_std = data['Close'].rolling(window=20).std()
+            bb_upper = bb_middle + (bb_std * 2)
+            bb_lower = bb_middle - (bb_std * 2)
+            
+            ax1.fill_between(data.index, bb_upper, bb_lower, alpha=0.15, color='#6c5ce7', label='Bollinger (20,2)')
+            ax1.plot(data.index, bb_upper, color='#6c5ce7', linewidth=1, alpha=0.5, linestyle=':')
+            ax1.plot(data.index, bb_lower, color='#6c5ce7', linewidth=1, alpha=0.5, linestyle=':')
+            
+            # Info
+            last = data.iloc[-1]
+            info_text = f"Op: {last['Open']:.0f}, Hi: {last['High']:.0f}, Lo: {last['Low']:.0f}, Cl: {last['Close']:.0f}"
+            ax1.text(0.02, 0.98, info_text, transform=ax1.transAxes, fontsize=10, color='#ffffff', 
+                    verticalalignment='top', bbox=dict(boxstyle='round', facecolor='#1f2937', alpha=0.8))
+            
+            ax1.set_title(f'{symbol} Custom Chart', color='#ffffff', fontsize=14, fontweight='bold', pad=20)
+            ax1.set_ylabel('Harga', color='#a0aec0', fontsize=10)
+            ax1.grid(True, alpha=0.15, color='#2d3748')
+            ax1.legend(loc='upper left', facecolor='#1f2937', edgecolor='#2d3748', labelcolor='#ffffff')
+            ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+            ax1.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+            ax1.tick_params(colors='#a0aec0')
+            
+            # ===== PLOT 2: MACD =====
+            ax2 = fig.add_subplot(gs[1])
+            ax2.set_facecolor('#0d1117')
+            
+            exp1 = data['Close'].ewm(span=12, adjust=False).mean()
+            exp2 = data['Close'].ewm(span=26, adjust=False).mean()
+            macd = exp1 - exp2
+            macd_signal = macd.ewm(span=9, adjust=False).mean()
+            macd_hist = macd - macd_signal
+            
+            ax2.plot(data.index, macd, color='#00d4ff', linewidth=1.5, label='MACD (26, 12)')
+            ax2.plot(data.index, macd_signal, color='#ffd93d', linewidth=1.5, label='EXP (9)')
+            colors = ['#00d4ff' if val >= 0 else '#ff6b6b' for val in macd_hist]
+            ax2.bar(data.index, macd_hist, color=colors, alpha=0.5, width=0.8)
+            ax2.axhline(y=0, color='#4a5568', linewidth=0.5)
+            
+            macd_text = f"MACD (26, 12): {macd.iloc[-1]:.2f}  EXP (9): {macd_signal.iloc[-1]:.2f}"
+            ax2.text(0.02, 0.92, macd_text, transform=ax2.transAxes, fontsize=9, color='#a0aec0',
+                    verticalalignment='top', bbox=dict(boxstyle='round', facecolor='#1f2937', alpha=0.8))
+            
+            ax2.set_ylabel('MACD', color='#a0aec0', fontsize=10)
+            ax2.grid(True, alpha=0.15, color='#2d3748')
+            ax2.legend(loc='upper left', facecolor='#1f2937', edgecolor='#2d3748', labelcolor='#ffffff')
+            ax2.tick_params(colors='#a0aec0')
+            
+            # ===== PLOT 3: RSI =====
+            ax3 = fig.add_subplot(gs[2])
+            ax3.set_facecolor('#0d1117')
+            
+            delta = data['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+            
+            ax3.plot(data.index, rsi, color='#ff6b6b', linewidth=1.5, label='RSI (14)')
+            ax3.axhline(y=70, color='#ff6b6b', linewidth=0.5, linestyle='--', alpha=0.5)
+            ax3.axhline(y=30, color='#00d4ff', linewidth=0.5, linestyle='--', alpha=0.5)
+            ax3.fill_between(data.index, 70, 100, alpha=0.1, color='#ff6b6b')
+            ax3.fill_between(data.index, 0, 30, alpha=0.1, color='#00d4ff')
+            
+            rsi_text = f"RSI (14): {rsi.iloc[-1]:.0f}"
+            ax3.text(0.02, 0.92, rsi_text, transform=ax3.transAxes, fontsize=9, color='#a0aec0',
+                    verticalalignment='top', bbox=dict(boxstyle='round', facecolor='#1f2937', alpha=0.8))
+            
+            ax3.set_ylabel('RSI', color='#a0aec0', fontsize=10)
+            ax3.set_ylim(0, 100)
+            ax3.grid(True, alpha=0.15, color='#2d3748')
+            ax3.legend(loc='upper left', facecolor='#1f2937', edgecolor='#2d3748', labelcolor='#ffffff')
+            ax3.tick_params(colors='#a0aec0')
+            
+            # ===== PLOT 4: Stochastic =====
+            ax4 = fig.add_subplot(gs[3])
+            ax4.set_facecolor('#0d1117')
+            
+            low_14 = data['Low'].rolling(14).min()
+            high_14 = data['High'].rolling(14).max()
+            stoch_k = 100 * ((data['Close'] - low_14) / (high_14 - low_14))
+            stoch_d = stoch_k.rolling(3).mean()
+            
+            ax4.plot(data.index, stoch_k, color='#00d4ff', linewidth=1.5, label='%K (14)')
+            ax4.plot(data.index, stoch_d, color='#ffd93d', linewidth=1.5, label='%D (3)')
+            ax4.axhline(y=80, color='#ff6b6b', linewidth=0.5, linestyle='--', alpha=0.5)
+            ax4.axhline(y=20, color='#00d4ff', linewidth=0.5, linestyle='--', alpha=0.5)
+            ax4.fill_between(data.index, 80, 100, alpha=0.1, color='#ff6b6b')
+            ax4.fill_between(data.index, 0, 20, alpha=0.1, color='#00d4ff')
+            
+            stoch_text = f"Stoch %K (14, 3): {stoch_k.iloc[-1]:.2f}  %D (3): {stoch_d.iloc[-1]:.2f}"
+            ax4.text(0.02, 0.92, stoch_text, transform=ax4.transAxes, fontsize=9, color='#a0aec0',
+                    verticalalignment='top', bbox=dict(boxstyle='round', facecolor='#1f2937', alpha=0.8))
+            
+            ax4.set_ylabel('Stochastic', color='#a0aec0', fontsize=10)
+            ax4.set_ylim(0, 100)
+            ax4.grid(True, alpha=0.15, color='#2d3748')
+            ax4.legend(loc='upper left', facecolor='#1f2937', edgecolor='#2d3748', labelcolor='#ffffff')
+            ax4.tick_params(colors='#a0aec0')
+            
+            # Format x-axis
+            for ax in [ax1, ax2, ax3, ax4]:
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+                ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+                ax.tick_params(axis='x', colors='#a0aec0')
+            
+            # Footer
+            footer_text = f"Generated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} WITA"
+            fig.text(0.5, 0.01, footer_text, ha='center', fontsize=8, color='#4a5568')
+            
+            plt.tight_layout()
+            filename = f"{self.chart_dir}/{symbol}_custom_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            plt.savefig(filename, dpi=100, bbox_inches='tight', facecolor='#0d1117')
+            plt.close()
+            
+            logger.info(f"✅ Chart custom {symbol} berhasil dibuat")
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Error creating custom chart: {str(e)}")
+            return None
+
+# ============================================
 # BOT UTAMA
 # ============================================
 
@@ -594,7 +611,7 @@ class SahamBot:
         self.bot = Bot(token=TELEGRAM_TOKEN)
         self.screener = Screener()
         self.signal_gen = SignalGenerator()
-        self.chart_gen = ChartGenerator()  # Tambahkan chart generator
+        self.chart_gen = ChartGenerator()
         self.watchlist = WATCHLIST.copy()
         self.running = False
         self.job = None
@@ -611,20 +628,14 @@ class SahamBot:
             return f"{days}d {hours}h {minutes}m"
         return f"{hours}h {minutes}m"
 
-    # ============================================
-    # COMMAND HANDLERS
-    # ============================================
-
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         status = "⚠️ Mode Data Realistis" if self.screener.use_fallback else "✅ Data Real-time"
-        
         await update.message.reply_text(
             f"🤖 *Bot Saham Danar v2.3*\n\n"
             f"📊 Status: {status}\n"
             f"📋 Watchlist: {len(self.watchlist)} saham\n"
             f"🕐 Uptime: {self.get_uptime()}\n\n"
-            f"📌 Perintah: /help untuk bantuan\n"
-            f"📌 Jika data error, gunakan /refresh",
+            f"📌 Perintah: /help untuk bantuan",
             parse_mode='Markdown'
         )
 
@@ -645,11 +656,10 @@ class SahamBot:
             "/refresh - Refresh data\n\n"
             "*📈 Chart:*\n"
             "/chart SYMBOL - Chart sederhana\n"
-            "/chart_custom SYMBOL - Chart lengkap (MACD, RSI, Stochastic)\n\n"
+            "/chart_custom SYMBOL - Chart lengkap\n\n"
             "*🤖 Monitoring:*\n"
             "/start_bot - Mulai monitoring\n"
-            "/stop_bot - Stop monitoring\n\n"
-            "⚠️ *Data menggunakan angka realistis jika Yahoo Finance error*",
+            "/stop_bot - Stop monitoring",
             parse_mode='Markdown'
         )
 
@@ -674,8 +684,7 @@ class SahamBot:
 
             await msg.edit_text(message, parse_mode='Markdown')
         except Exception as e:
-            logger.error(f"Screener error: {str(e)}")
-            await msg.edit_text(f"❌ Error: {str(e)}\nGunakan /refresh")
+            await msg.edit_text(f"❌ Error: {str(e)}")
 
     async def watchlist(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self.watchlist:
@@ -697,7 +706,7 @@ class SahamBot:
 
     async def add(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not context.args:
-            await update.message.reply_text("❌ Gunakan: /add SYMBOL (contoh: /add BBCA)")
+            await update.message.reply_text("❌ Gunakan: /add SYMBOL")
             return
 
         symbol = context.args[0].upper()
@@ -723,7 +732,7 @@ class SahamBot:
 
     async def signal(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not context.args:
-            await update.message.reply_text("❌ Gunakan: /signal SYMBOL (contoh: /signal BBCA)")
+            await update.message.reply_text("❌ Gunakan: /signal SYMBOL")
             return
 
         symbol = context.args[0].upper()
@@ -735,9 +744,7 @@ class SahamBot:
                 await msg.edit_text(f"❌ Data *{symbol}* tidak tersedia.", parse_mode='Markdown')
                 return
 
-            signal_emoji = "🟢" if signal['signal'] == 'BUY' else "🔴" if signal['signal'] == 'SELL' else "⚪"
             signal_text = "🔴 *JUAL*" if signal['signal'] == 'SELL' else "🟢 *BELI*" if signal['signal'] == 'BUY' else "⚪ *TAHAN*"
-
             fallback_note = "\n⚠️ *Data Realistis*" if self.screener.use_fallback else ""
 
             message = f"📊 *Analisis {symbol}*\n\n"
@@ -758,7 +765,7 @@ class SahamBot:
 
     async def chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not context.args:
-            await update.message.reply_text("❌ Gunakan: /chart SYMBOL (contoh: /chart BBCA)")
+            await update.message.reply_text("❌ Gunakan: /chart SYMBOL")
             return
 
         symbol = context.args[0].upper()
@@ -770,25 +777,17 @@ class SahamBot:
                 await msg.edit_text(f"❌ Data *{symbol}* tidak tersedia.", parse_mode='Markdown')
                 return
 
-            # Buat chart sederhana
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [3, 1]})
-            
-            # Price chart
             ax1.plot(data.index, data['Close'], label='Close', linewidth=2, color='blue')
             if len(data) >= 20:
                 ax1.plot(data.index, data['Close'].rolling(20).mean(), label='MA20', linestyle='--', color='orange')
-            if len(data) >= 50:
-                ax1.plot(data.index, data['Close'].rolling(50).mean(), label='MA50', linestyle='--', color='red')
             ax1.set_title(f'{symbol} - {COMPANY_NAMES.get(symbol, symbol)}')
             ax1.set_ylabel('Price')
             ax1.legend()
             ax1.grid(True, alpha=0.3)
-            
-            # Volume
             ax2.bar(data.index, data['Volume'], alpha=0.5, color='gray')
             ax2.set_ylabel('Volume')
             ax2.grid(True, alpha=0.3)
-            
             plt.tight_layout()
             
             filename = f"chart_{symbol}.png"
@@ -797,32 +796,23 @@ class SahamBot:
 
             with open(filename, 'rb') as photo:
                 await update.message.reply_photo(photo=photo, caption=f"📈 Chart {symbol}")
-            
             os.remove(filename)
             await msg.delete()
 
         except Exception as e:
-            logger.error(f"Chart error: {str(e)}")
             await msg.edit_text(f"❌ Error: {str(e)}")
 
     async def chart_custom(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handler untuk /chart_custom SYMBOL - Chart lengkap dengan indikator"""
         if not context.args:
             await update.message.reply_text(
                 "❌ Gunakan: /chart_custom SYMBOL (contoh: /chart_custom BBCA)\n\n"
-                "*Indikator:*\n"
-                "• Bollinger Bands (20,2)\n"
-                "• SMA 20 & SMA 50\n"
-                "• MACD (26,12,9)\n"
-                "• RSI (14)\n"
-                "• Stochastic (14,3)\n"
-                "• Williams %R",
+                "*Indikator:* Bollinger, SMA, MACD, RSI, Stochastic",
                 parse_mode='Markdown'
             )
             return
             
         symbol = context.args[0].upper()
-        msg = await update.message.reply_text(f"📊 *Membuat chart custom {symbol}...*\n⏳ Mohon tunggu...", parse_mode='Markdown')
+        msg = await update.message.reply_text(f"📊 *Membuat chart custom {symbol}...*", parse_mode='Markdown')
         
         try:
             chart_path = self.chart_gen.create_chart(symbol)
@@ -830,29 +820,18 @@ class SahamBot:
                 with open(chart_path, 'rb') as photo:
                     await update.message.reply_photo(
                         photo=photo, 
-                        caption=f"📈 *{symbol} - Custom Chart*\n"
-                               f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                               f"*Indikator:* Bollinger, SMA, MACD, RSI, Stochastic, Williams %R",
+                        caption=f"📈 *{symbol} - Custom Chart*\n🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
                         parse_mode='Markdown'
                     )
                 os.remove(chart_path)
                 await msg.delete()
             else:
-                await msg.edit_text(
-                    f"❌ Gagal membuat chart untuk *{symbol}*.\n\n"
-                    f"*Kemungkinan penyebab:*\n"
-                    f"• Data tidak tersedia untuk {symbol}\n"
-                    f"• Yahoo Finance sedang bermasalah\n"
-                    f"• Coba /refresh atau /chart {symbol}",
-                    parse_mode='Markdown'
-                )
+                await msg.edit_text(f"❌ Gagal membuat chart untuk *{symbol}*.", parse_mode='Markdown')
         except Exception as e:
-            logger.error(f"Chart custom error: {str(e)}")
-            await msg.edit_text(f"❌ Error: {str(e)}\nGunakan /refresh jika perlu.")
+            await msg.edit_text(f"❌ Error: {str(e)}")
 
     async def top(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await update.message.reply_text("📊 *Mencari volume tertinggi...*", parse_mode='Markdown')
-
         try:
             top_stocks = self.screener.get_top_by_volume(5)
             if not top_stocks:
@@ -873,7 +852,6 @@ class SahamBot:
 
     async def check(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await update.message.reply_text("🔍 *Mengecek sinyal...*", parse_mode='Markdown')
-
         try:
             signals = self.signal_gen.check_all_signals()
             if not signals:
@@ -904,7 +882,6 @@ class SahamBot:
 
     async def stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         status = "⚠️ Realistis" if self.screener.use_fallback else "✅ Real-time"
-        
         await update.message.reply_text(
             f"📊 *Statistik Bot v2.3*\n\n"
             f"🕐 Uptime: {self.get_uptime()}\n"
@@ -922,28 +899,15 @@ class SahamBot:
         try:
             self.screener.clear_cache()
             self.screener.use_fallback = False
-            await msg.edit_text(
-                "✅ *Data cache berhasil direfresh!*\n"
-                "Coba /screener lagi.\n\n"
-                "⚠️ Jika masih error, bot akan otomatis pakai data realistis.",
-                parse_mode='Markdown'
-            )
+            await msg.edit_text("✅ *Data cache berhasil direfresh!*", parse_mode='Markdown')
         except Exception as e:
             await msg.edit_text(f"❌ Error: {str(e)}")
 
     async def start_bot(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self.running:
             self.running = True
-            self.job = context.job_queue.run_repeating(
-                self._monitor_stocks,
-                interval=300,
-                first=10
-            )
-            await update.message.reply_text(
-                "✅ *Monitoring dimulai!*\n"
-                "Cek sinyal setiap 5 menit.",
-                parse_mode='Markdown'
-            )
+            self.job = context.job_queue.run_repeating(self._monitor_stocks, interval=300, first=10)
+            await update.message.reply_text("✅ *Monitoring dimulai!*", parse_mode='Markdown')
         else:
             await update.message.reply_text("⚠️ Monitoring sudah aktif.", parse_mode='Markdown')
 
@@ -956,64 +920,34 @@ class SahamBot:
         else:
             await update.message.reply_text("ℹ️ Monitoring tidak aktif.", parse_mode='Markdown')
 
-    # ============================================
-    # MONITORING FUNCTION
-    # ============================================
-
     async def _monitor_stocks(self, context: ContextTypes.DEFAULT_TYPE):
         try:
             logger.info("🔄 Running monitoring...")
             signals = self.signal_gen.check_all_signals()
-
             for symbol, signal in signals.items():
                 if symbol in self.watchlist and signal['signal'] != 'HOLD' and signal['strength'] >= 2:
                     if CHANNEL_ID:
-                        try:
-                            message = f"🟢 *SINYAL {signal['signal']} - {symbol}*\n\n"
-                            message += f"💰 {format_price(signal['price'])}\n"
-                            message += f"📊 {signal['change']:+.2f}%\n"
-                            message += f"📈 RSI: {signal['rsi']:.1f}\n"
-                            message += f"💡 {signal['reason']}\n"
-                            message += f"💪 Strength: {signal['strength']}/5"
-
-                            await self.bot.send_message(
-                                chat_id=CHANNEL_ID,
-                                text=message,
-                                parse_mode='Markdown'
-                            )
-                            logger.info(f"📬 Signal sent: {symbol}")
-                        except Exception as e:
-                            logger.error(f"Error sending signal: {str(e)}")
-
+                        message = f"🟢 *SINYAL {signal['signal']} - {symbol}*\n\n"
+                        message += f"💰 {format_price(signal['price'])}\n"
+                        message += f"📊 {signal['change']:+.2f}%\n"
+                        message += f"💡 {signal['reason']}"
+                        await self.bot.send_message(chat_id=CHANNEL_ID, text=message, parse_mode='Markdown')
         except Exception as e:
             logger.error(f"Error monitoring: {str(e)}")
             self.error_count += 1
 
-    # ============================================
-    # ERROR HANDLER
-    # ============================================
-
     async def _error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error: {context.error}")
         self.error_count += 1
-        
         try:
             if update and update.effective_message:
-                await update.effective_message.reply_text(
-                    "❌ Terjadi kesalahan.\n"
-                    "Gunakan /refresh untuk mencoba lagi."
-                )
+                await update.effective_message.reply_text("❌ Terjadi kesalahan. Gunakan /refresh")
         except:
             pass
-
         if self.error_count > self.max_errors:
             logger.warning(f"⚠️ Terlalu banyak error ({self.error_count}), restarting...")
             self.error_count = 0
             sys.exit(0)
-
-    # ============================================
-    # RUN BOT
-    # ============================================
 
     def run(self):
         try:
@@ -1023,7 +957,6 @@ class SahamBot:
 
             application = Application.builder().token(TELEGRAM_TOKEN).build()
 
-            # Register commands
             application.add_handler(CommandHandler("start", self.start))
             application.add_handler(CommandHandler("help", self.help))
             application.add_handler(CommandHandler("screener", self.screener))
@@ -1044,19 +977,11 @@ class SahamBot:
 
             logger.info("🚀 Bot starting...")
             print("=" * 60)
-            print("🤖 BOT SAHAM DANAR v2.3 - DENGAN CHART CUSTOM")
+            print("🤖 BOT SAHAM DANAR v2.3 - ALL IN ONE")
             print("=" * 60)
             print(f"📌 Token: ✓")
             print(f"📌 Watchlist: {len(self.watchlist)} saham")
             print(f"📌 Chart Custom: Aktif")
-            print(f"📌 Data Realistis: Siap digunakan jika Yahoo Finance error")
-            print("=" * 60)
-            print("\n📊 Perintah Tersedia:")
-            print("  /start - Menu utama")
-            print("  /screener - Screening saham")
-            print("  /chart_custom SYMBOL - Chart lengkap dengan indikator")
-            print("  /signal SYMBOL - Cek sinyal")
-            print("  /help - Bantuan lengkap")
             print("=" * 60)
 
             application.run_polling(
@@ -1068,8 +993,6 @@ class SahamBot:
 
         except Exception as e:
             logger.error(f"Fatal error: {str(e)}")
-            logger.error(traceback.format_exc())
-            time.sleep(5)
             sys.exit(1)
 
 # ============================================
@@ -1085,5 +1008,4 @@ if __name__ == '__main__':
         sys.exit(0)
     except Exception as e:
         print(f"\n❌ Fatal: {str(e)}")
-        time.sleep(5)
         sys.exit(1)
