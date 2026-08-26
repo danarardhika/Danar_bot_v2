@@ -46,7 +46,7 @@ def get_env_var(var_name: str, default: str = '') -> str:
 
 # Token - MANDATORY
 try:
-    TELEGRAM_TOKEN = get_env_var('TELEGRAM_TOKEN')
+    TELEGRAM_TOKEN = get_env_var('8523825536:AAFrUBVnWCL90wV-IFvggJ7ZDMLJBpTJl1g')
     print(f"✅ TELEGRAM_TOKEN ditemukan: {TELEGRAM_TOKEN[:15]}...")
 except ValueError as e:
     print("=" * 70)
